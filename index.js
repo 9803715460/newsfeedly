@@ -8,20 +8,17 @@ let fs = require("fs"); //File Stream (used to read, write, delete files on serv
 let https = require('https');
 let config = require("./config.json");
 let mongoose = require("mongoose");
+let cors = require("cors");
 
 /**
  * Server Config
  */
 let app = express();
+app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded(
     { extended: true }
 ));
-
-/**
- * Misc. Initializations
- */
-let lockFile = "cron.lock";
 
 /**
  * API Config
@@ -69,7 +66,7 @@ let NewsFeedModel = mongoose.model('NewsFeedModel', NewsFeedSchema);
  * @param {*} options : API Options
  * @param {*} callback : Returns the news JSON array
  */
-function getNewsFeed(options, callback) {
+function getNewsFeed(options) {
     console.log(options);
     let req = https.get(options, (response) => {
         let bodyChunks = [];
@@ -78,26 +75,7 @@ function getNewsFeed(options, callback) {
         }).on('end', () => {
             let body = Buffer.concat(bodyChunks);
             let data = JSON.parse(body);
-            return callback(data.articles);
-        })
-    });
 
-    req.on('error', (err) => {
-        console.log('ERROR: ' + err.message);
-    });
-}
-
-let newsFetchJob = cron.schedule('*/10 * * * * *', () => {
-    if (!fs.existsSync(lockFile)) {
-        fs.writeFileSync(lockFile);
-        console.log("Job Started.")
-        console.log("Last Run Date : " + getLastDate());
-        let reqOptions = {
-            host: apiURL,
-            method: 'GET',
-            path: "/v2/everything?sources=" + newsSources.join() + "&from=" + getLastDate() + "&apiKey=" + config.apiKey
-        }
-        getNewsFeed(reqOptions, (data) => {
             //Set the date marker
             let date = new Date();
             date.setHours(date.getHours() + 5);
@@ -111,8 +89,11 @@ let newsFetchJob = cron.schedule('*/10 * * * * *', () => {
                 }
             });
 
+            console.log(data.articles);
+
+
             //Insert data in MongoDB
-            data.forEach(newsFeedItem => {
+            data.articles.forEach(newsFeedItem => {
                 let NewsFeedInstance = new NewsFeedModel(newsFeedItem);
                 NewsFeedInstance.save((err) => {
                     if (err) {
@@ -121,28 +102,50 @@ let newsFetchJob = cron.schedule('*/10 * * * * *', () => {
                 });
             });
 
-            console.log(data.length + " records added");
-            fs.unlinkSync(lockFile);
-            console.log("File Deleted");
-        });
+            console.log(data.articles.length + " records added");
+        })
+    });
+
+    req.on('error', (err) => {
+        console.log('ERROR: ' + err.message);
+    });
+}
+
+let newsFetchJob = cron.schedule('*/10 * * * * *', () => {
+    console.log("Job Started.")
+    console.log("Last Run Date : " + getLastDate());
+    let reqOptions = {
+        host: apiURL,
+        method: 'GET',
+        path: "/v2/everything?sources=" + newsSources.join() + "&from=" + getLastDate() + "&apiKey=" + config.apiKey
     }
+
+    getNewsFeed(reqOptions);
 }, false);
 
 newsFetchJob.start();
 
-app.get("/", (req, res) => {
+app.get("/news", (req, res) => {
+    console.log("News API got a hit");
     NewsFeedModel.find({}, (err, NewsFeed) => {
         res.json(NewsFeed);
         res.end();
     });
 });
-app.get("/news", (req, res) => {
+app.post("/search", (req, res) => {
+    let q = req.param("keyword");
+    NewsFeedModel.find(
+        {
+            'title': new RegExp(q, "i"), //Imitates like Query
+            'source.id': { $in: req.param("sources") } //This imitates IN clause
+        }
+        , (err, NewsFeed) => {
+            res.json(NewsFeed);
+            res.end();
+        });
 
 });
 
 app.listen(8080, () => {
-    console.log('Server started');
-    if (fs.existsSync(lockFile)) {
-        fs.unlinkSync(lockFile);
-    };
+    console.log('Server started at http://localhost:8080/');
 });
