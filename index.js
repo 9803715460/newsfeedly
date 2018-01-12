@@ -31,7 +31,7 @@ mongoose.connect(mongoDB, { usemongoclient: true });
 mongoose.Promise = global.Promise;
 let db = mongoose.connection;
 db.on("error", console.error.bind(console, 'MongoDB Connection Error: '));
-
+ 
 
 let Schema = mongoose.Schema;
 
@@ -62,7 +62,7 @@ function getNewsFeed(options) {
             let data = JSON.parse(body);
 
            
-            let date = new Date();
+            let date = new Date()
             date.setHours(date.getHours() + 5);
             date.setMinutes(date.getMinutes() + 30);
             config.updatedOn = date.toISOString();
@@ -96,13 +96,13 @@ function getNewsFeed(options) {
     });
 }
 
-let newsFetchJob = cron.schedule('*/10 * * * * *', () => {
+let newsFetchJob = cron.schedule('* */10 * * * *', () => {
     console.log("Job Started.")
     console.log("Last Run Date : " + getLastDate());
     let reqOptions = {
         host: apiURL,
         method: 'GET',
-        path: "/v2/everything?sources=" + newsSources.join() + "&from=" + getLastDate() + "&apiKey=" + config.apiKey
+        path: "/v2/everything?sources=" + newsSources.join() + "&from=" + getLastDate() + "&apiKey=" + config.apiKey +"&sortby"
     }
 
     getNewsFeed(reqOptions);
@@ -115,7 +115,7 @@ app.get("/news", (req, res) => {
     NewsFeedModel.find({}, (err, NewsFeed) => {
         res.json(NewsFeed);
         res.end();
-    });
+    }).sort({publishedAt:-1});
 });
 app.post("/search", (req, res) => {
     let q = req.param("keyword");
