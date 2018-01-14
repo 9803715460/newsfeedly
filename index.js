@@ -96,7 +96,7 @@ function getNewsFeed(options) {
     });
 }
 
-let newsFetchJob = cron.schedule('* */10 * * * *', () => {
+let newsFetchJob = cron.schedule('*/10 * * * * *', () => {
     console.log("Job Started.")
     console.log("Last Run Date : " + getLastDate());
     let reqOptions = {
@@ -116,19 +116,18 @@ app.get("/news", (req, res) => {
         res.json(NewsFeed);
         res.end();
     }).sort({publishedAt:-1});
-});
+}); 
 app.post("/search", (req, res) => {
     let q = req.param("keyword");
     NewsFeedModel.find(
         {
-            'title': new RegExp(q, "i"), 
-            'source.id': { $in: req.param("sources") } 
+            'title': new RegExp(q, "i"),  // works as LIKE clause of SQL
+            'source.id': { $in: req.param("sources") } //works as IN clause of SQL
         }
         , (err, NewsFeed) => {
             res.json(NewsFeed);
             res.end();
         });
-
 });
 
 app.listen(8080, () => {
